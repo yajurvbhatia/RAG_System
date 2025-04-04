@@ -1,11 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
-# from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-# from langchain.embeddings import HuggingFaceEmbeddings
-# from langchain.vectorstores import FAISS
-# Update deprecated imports in main.py
 from langchain_community.document_loaders import PyPDFLoader
-# from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
 import os
@@ -85,8 +80,8 @@ async def query_pdf(request: QueryRequest):
             f"{request.vector_store_name}_faiss_index"
         )
         
-        print(vector_store_path)
-        vector_store_path = "/Users/yajurvbhatia/Documents/RAG_project/vector_stores/tulip_wiki_article_faiss_index"
+        cwd = os.getcwd()
+        vector_store_path = cwd + vector_store_path
         # Load the FAISS index with allow_dangerous_deserialization
         vectorstore = FAISS.load_local(
             vector_store_path, 
