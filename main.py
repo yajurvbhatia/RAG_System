@@ -1,31 +1,28 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from pydantic import BaseModel
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
+from agents import agent
+import uuid
+from typing import Optional
 
 import os
-import tempfile 
-from pydantic import BaseModel
-from langchain.chains import RetrievalQA
-from langchain.llms import OpenAI  # or any other LLM you prefer
-import os
+import tempfile
 
-from rag import embeddings, llm
+from rag import embeddings, get_or_create_memory, session_memories
+from config import VECTOR_STORE_DIR, CHUNK_SIZE, CHUNK_OVERLAP, AGENT_PROMPT
 
 app = FastAPI()
 
-# Configuration
-EMBEDDING_MODEL = "sentence-transformers/all-mpnet-base-v2"
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 200
-VECTOR_STORE_DIR = "vector_stores"
-
-# Create directory for vector stores if it doesn't exist
-os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
 
 @app.post("/process-pdf/")
 async def process_pdf(file: UploadFile = File(...)):
+    # agent.memory.clear()  # Clear memory before processing a new PDF
     try:
+        # Create directory for vector stores if it doesn't exist
+        os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
         # Save the uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(await file.read())
@@ -46,7 +43,6 @@ async def process_pdf(file: UploadFile = File(...)):
         splits = text_splitter.split_documents(documents)
         
         # Create embeddings and vector store
-        # embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
         vectorstore = FAISS.from_documents(splits, embeddings)
         
         # Save vector store locally
@@ -56,7 +52,7 @@ async def process_pdf(file: UploadFile = File(...)):
         
         return {
             "message": "PDF processed successfully",
-            "vector_store_path": save_path,
+            "vector_store_name": save_path,
             "num_documents": len(splits)
         }
     
@@ -69,53 +65,31 @@ async def process_pdf(file: UploadFile = File(...)):
 class QueryRequest(BaseModel):
     query: str
     vector_store_name: str
+    session_id: Optional[str] = None
 
 
 @app.post("/query-pdf/")
 async def query_pdf(request: QueryRequest):
-    try:
-        # Construct the full path to the vector store
-        vector_store_path = os.path.join(
-            VECTOR_STORE_DIR, 
-            f"{request.vector_store_name}_faiss_index"
-        )
-        
-        cwd = os.getcwd()
-        vector_store_path = cwd + vector_store_path
-        # Load the FAISS index with allow_dangerous_deserialization
-        vectorstore = FAISS.load_local(
-            vector_store_path, 
-            embeddings,
-            allow_dangerous_deserialization=True  # Only safe because we created these files
-        )
-        # Check if vector store exists
-        if not os.path.exists(vector_store_path):
-            raise HTTPException(status_code=404, detail="Vector store not found")
-        
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            chain_type="stuff",
-            retriever=vectorstore.as_retriever(),
-            return_source_documents=True
-        )
-        
-        # Execute the query
-        result = qa_chain({"query": request.query})
-        
-        return {
-            "query": request.query,
-            "answer": result["result"],
-            "source_documents": [
-                {
-                    "content": doc.page_content,
-                    "metadata": doc.metadata,
-                    "score": doc.metadata.get("score", None)  # Include similarity score if available
-                } 
-                for doc in result["source_documents"]
-            ]
-        }
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
+    if not request.session_id:
+        session_id = str(uuid.uuid4())
+    else:
+        session_id = request.session_id
 
+    # Run the agent
+    user_query = str(request.query)
+    # if user_query.lower() == "exit":
+    #     break
+
+    agent.memory = get_or_create_memory(session_id)
+    session_memories[session_id] = agent.memory
+    print("Session memory stored")
+    response = agent.run(f"'user_query': {user_query}, 'session_id': {session_id}")
+    print(f"\n🤖 Agent: {response}")
+    print(f"\n🤖 Memory: {agent.memory.buffer}")
+    # agent.memory.clear()
+
+    return {
+        "agent_response": response,
+        "session_id": session_id
+    }
