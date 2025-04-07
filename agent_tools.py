@@ -1,80 +1,75 @@
 from langchain.tools import Tool
-from langchain.vectorstores import FAISS
-from langchain.embeddings import OpenAIEmbeddings
 from fastapi import HTTPException
-from langchain.chains import RetrievalQA
-from utils import get_or_create_memory
-
-from utils import llm
-from config import DB_PASSWORD, OPENAI_API_KEY, VECTOR_STORE_DIR
-import psycopg2
 import os
-import json
+
+from utils import connect_to_db, embedder, active_sessions
+from config import OPENAI_API_KEY
+
 
 if not os.environ.get("OPENAI_API_KEY"):
-  os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+    os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
 
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
-
-# Define RAG Tool (Retrieval + Generation)
-def rag_tool(query):
-    vector_store_name = "tulip_wiki_article"
-
-    # print("IN RAG TOOL")
+# Define Retrieval Tool
+def retrieve(query):
+    # print("RECIEVED QUERY IS:", query)
+    top_k = 5
     try:
-        # Construct the full path to the vector store
-        vector_store_path = os.getcwd() + '/' + VECTOR_STORE_DIR + '/' + f"{vector_store_name}_faiss_index"
+        # print("in the retrieval tool")
+        # Getting query vector
+        query_vector = embedder.embed_query(query)
+        vector_str = "[" + ",".join([str(x) for x in query_vector]) + "]"
 
-        # Check if vector store exists
-        if not os.path.exists(vector_store_path):
-            raise HTTPException(status_code=404, detail="Vector store not found")
+        # print("Fetching relevant vectors")
+        # Fetching similar vectors
+        conn = connect_to_db()
+        cursor = conn.cursor()
 
-        # Load the FAISS index with allow_dangerous_deserialization
-        vectorstore = FAISS.load_local(
-            vector_store_path, 
-            embeddings,
-            allow_dangerous_deserialization=True  # Only safe because we created these files
+        # print("running main postgres query")
+        # Cosine Sim is a better metric ******
+        # Check if each distance calculation involves IO operation for each row or not.
+        # VECTOR DB - MongoDB, MongoDB Atlas (cloud only), Pinecone, Weaviate, ChromaDB
+        # Better Storage, Better algorithm for vector search
+        cursor.execute(
+            "SELECT content, embedding <=> %s::vector AS distance FROM documents ORDER BY distance LIMIT %s",
+            (vector_str, top_k)
         )
+        # print("running fetch_all")
+        similar_vectors = cursor.fetchall()
 
-        qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
-            chain_type="stuff",
-            retriever=vectorstore.as_retriever(),
-            return_source_documents=True
-        )
+        # print("type of the returned data is:", type(similar_vectors))
         
-        result = qa_chain.invoke({"query": query})
-
-
-        return f"Final Answer: {result["result"]}"
+        relevant_info = [item[0] for item in similar_vectors]  # Extract just content
+        return f"relevant information: {relevant_info}"
         
     except Exception as e:
-        print(f"Error in RAG tool: {e}")
+        print(f"Error in Retrieval tool: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-rag = Tool(
-            name="RAG Tool",
-            func=rag_tool,
-            description="Use this tool to retrieve and generate responses based on knowledge."
+retrieval_tool = Tool(
+            name="Retrieval Tool",
+            func=retrieve,
+            description="Use this tool to retrieve relevant knowledge."
         )
 
-
-def db_update_tool(input_str: str):
+# Function to save conversation to PostgreSQL
+def db_save_conversation(session_id: str):
     table_name = 'conversations'
-    user_id = 1
-    conversation_id = 1
-    print("🧠 Entering db_update_tool...")
+
+    # Getting Session info
+    session = active_sessions.get(session_id)
+    user_id = session.user_id
+    conversation_id = session.conversation_id
+    memory = session.memory
+
+    # All messages in the conversation is the chat history
+    chat_history = [message.content for message in memory.chat_memory.messages]
+
+    print("🧠 Entering db_save_conversation tool...")
 
     try:
         # 1. Connect to DB
         print("🔌 Connecting to PostgreSQL...")
-        conn = psycopg2.connect(
-            dbname="sample",
-            user="postgres",
-            password=DB_PASSWORD,
-            host="localhost",
-            port="5432"
-        )
+        conn = connect_to_db()
         cursor = conn.cursor()
 
         # 2. Create table if not exists
@@ -87,55 +82,101 @@ def db_update_tool(input_str: str):
             );
         """)
 
-        # 3. Check if row exists
-        print("🔎 Checking if row exists...")
-        cursor.execute(f"""
-            SELECT chat_history FROM {table_name}
-            WHERE user_id = %s AND conversation_id = %s;
-        """, (user_id, conversation_id))
-
-        row = cursor.fetchone()
-
-        print("input recieved is:", input_str)
-
-        memory = get_or_create_memory(input_str)
-        chat_history = [message.content for message in memory.chat_memory.messages]
-
-        if not row:
-            # 4. Insert row with initial input_str
-            print("➕ Row does not exist. Inserting new row...")
+        # User tries to refer to a conversation that already exists
+        if conversation_id:
+            # 3. Check if row exists
+            print("🔎 Getting old conversation...")
             cursor.execute(f"""
-                INSERT INTO {table_name} (conversation_id, user_id, chat_history)
-                VALUES (%s, %s, %s);
-            """, (conversation_id, user_id, chat_history))
-        else:
-            # 5. Append new input to existing chat history
-            print("📜 Row exists. Appending to chat_history...")
-            
-            cursor.execute(f"""
-                UPDATE {table_name}
-                SET chat_history = %s
+                SELECT chat_history FROM {table_name}
                 WHERE user_id = %s AND conversation_id = %s;
-            """, (chat_history, user_id, conversation_id))
+            """, (user_id, conversation_id))
+            row = cursor.fetchone()
+
+            if row:
+                # 5. Append new input to existing chat history
+                print("📜 Row exists. Appending to chat_history...")
+                cursor.execute(f"""
+                    UPDATE {table_name}
+                    SET chat_history = %s
+                    WHERE user_id = %s AND conversation_id = %s;
+                """, (chat_history, user_id, conversation_id))
+        
+        # User tries to save the conversation as a new conversation
+        else:
+            # 4. Insert row with initial input_str
+            print("➕ Inserting new row...")
+            cursor.execute(f"""
+                INSERT INTO {table_name} (user_id, chat_history)
+                VALUES (%s, %s);
+            """, (user_id, chat_history))
 
         conn.commit()
         cursor.close()
         conn.close()
         print("✅ DB operation complete.")
 
-        return "Database updated successfully!"
+        return "Final Answer: Database updated successfully!"
 
     except Exception as e:
         print(f"💥 Error in db_update_tool: {e}")
         return f"DB update failed: {e}"
 
-db_update = Tool(
+db_save_conversation_tool = Tool(
     name="DB Update Tool",
-    func=db_update_tool,
+    func=db_save_conversation,
     description=(
         """Use this tool ONLY if the user's query clearly requests saving or updating the conversation history.
         This tool appends a new message (latest user query and agent response) to the chat history 
         in the PostgreSQL database. Use it when the user says something like 'save this', 'log this', or 'remember this'.
         Pass the 36 character length session_id as an input to this tool and nothing else."""
+    )
+)
+
+# Function to get all conversations for a given user_id
+def db_get_user_conversations(user_id: int):
+    # print("Input to get user conversations is:", user_id)
+    user_id = str(user_id)
+    table_name = 'conversations'
+
+    try:
+        # 1. Connect to DB
+        # print("🔌 Connecting to PostgreSQL...")
+        conn = connect_to_db()
+        cursor = conn.cursor()
+
+        # 2. Fetch all conversations for the given user_id
+        # print(f"🔎 Fetching conversations for user_id: {user_id}...")
+        cursor.execute(f"""
+            SELECT conversation_id, chat_history FROM {table_name}
+            WHERE user_id = %s;
+        """, (user_id))
+        conversations = cursor.fetchall()
+
+        # 3. Process and return the results
+        # print("✅ Conversations retrieved successfully.")
+        cursor.close()
+        conn.close()
+
+        # Format the results as a list of dictionaries
+        result = [
+            {"conversation_id": row[0], "chat_history": row[1]}
+            for row in conversations
+        ]
+        return "Final Answer: " + str(result)
+
+    except Exception as e:
+        print(f"💥 Error in db_read_tool: {e}")
+        raise HTTPException(status_code=500, detail=f"DB read failed: {e}")
+
+db_get_user_conversations_tool = Tool(
+    name="DB Read Tool",
+    func=db_get_user_conversations,
+    description=(
+        """Connects to the PostgreSQL server and retrieves all conversations for a given user ID.
+        Args:
+        user_id (int): The ID of the user whose conversations are to be retrieved. Do not pass anything else into the function.
+        Returns:
+        list: A list of conversations for the given user ID.
+        """
     )
 )
