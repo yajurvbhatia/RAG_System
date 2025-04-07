@@ -3,9 +3,9 @@ from langchain.vectorstores import FAISS
 from langchain.embeddings import OpenAIEmbeddings
 from fastapi import HTTPException
 from langchain.chains import RetrievalQA
-from rag import get_or_create_memory
+from utils import get_or_create_memory
 
-from rag import llm
+from utils import llm
 from config import DB_PASSWORD, OPENAI_API_KEY, VECTOR_STORE_DIR
 import psycopg2
 import os
@@ -36,46 +36,17 @@ def rag_tool(query):
             allow_dangerous_deserialization=True  # Only safe because we created these files
         )
 
-        # docs = vectorstore.as_retriever().similarity_search(query, k=5)
-        # print("Docs retrieved: ", len(docs))
-        # return docs[0].page_content if docs else "No relevant information found."
-
         qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
             retriever=vectorstore.as_retriever(),
             return_source_documents=True
-            # memory=ConversationBufferMemory(
-            #     memory_key="chat_history",
-            #     return_messages=True,  # Optional, but useful for debugging
-            #     output_key="result"    # 👈 CRUCIAL: must match RetrievalQA
-            # ),
-            # output_key="result"
         )
-
-
-
-        # print("QA chain created successfully")
         
         result = qa_chain.invoke({"query": query})
-        # print("QA Output Keys: ", result.keys())
 
 
         return f"Final Answer: {result["result"]}"
-        # return {
-        #     "query": query,
-        #     "answer": result["result"],
-        #     "source_documents": [
-        #         {
-        #             "content": doc.page_content,
-        #             "metadata": doc.metadata,
-        #             "score": doc.metadata.get("score", None)  # Include similarity score if available
-        #         } 
-        #         for doc in result["source_documents"]
-        #     ]
-        # }
-
-        
         
     except Exception as e:
         print(f"Error in RAG tool: {e}")

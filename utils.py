@@ -9,15 +9,11 @@ if not os.environ.get("OPENAI_API_KEY"):
 
 llm = ChatOpenAI(model_name="gpt-4o-mini")
 
-# llm = init_chat_model("gpt-4o-mini", model_provider="openai")
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
 session_memories = {}
 
 def get_or_create_memory(session_id: str):
-    print("session id type is:", type(session_id))
-    print("Current Session Memories:", list(session_memories.keys()))
-    print("Incoming session_id:", repr(session_id))
     if session_id not in session_memories:
         print("CREATING NEW MEMORY FOR:", repr(session_id))
         session_memories[session_id] = ConversationSummaryMemory(

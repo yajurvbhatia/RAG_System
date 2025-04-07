@@ -11,7 +11,7 @@ from typing import Optional
 import os
 import tempfile
 
-from rag import embeddings, get_or_create_memory, session_memories
+from utils import embeddings, get_or_create_memory, session_memories
 from config import VECTOR_STORE_DIR, CHUNK_SIZE, CHUNK_OVERLAP, AGENT_PROMPT
 
 app = FastAPI()
@@ -19,7 +19,6 @@ app = FastAPI()
 
 @app.post("/process-pdf/")
 async def process_pdf(file: UploadFile = File(...)):
-    # agent.memory.clear()  # Clear memory before processing a new PDF
     try:
         # Create directory for vector stores if it doesn't exist
         os.makedirs(VECTOR_STORE_DIR, exist_ok=True)
@@ -78,16 +77,13 @@ async def query_pdf(request: QueryRequest):
 
     # Run the agent
     user_query = str(request.query)
-    # if user_query.lower() == "exit":
-    #     break
-
     agent.memory = get_or_create_memory(session_id)
     session_memories[session_id] = agent.memory
     print("Session memory stored")
+
     response = agent.run(f"'user_query': {user_query}, 'session_id': {session_id}")
     print(f"\n🤖 Agent: {response}")
     print(f"\n🤖 Memory: {agent.memory.buffer}")
-    # agent.memory.clear()
 
     return {
         "agent_response": response,
