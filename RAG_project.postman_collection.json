@@ -1,0 +1,268 @@
+{
+	"info": {
+		"_postman_id": "30640c4e-626b-4fa5-9421-f700ab135e6c",
+		"name": "RAG_project",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "43602878",
+		"_collection_link": "https://yajurvbhatia-2966802.postman.co/workspace/Yajurv-Bhatia's-Workspace~e4589baf-45c2-4fcf-85b5-f6b37fb2a741/collection/43602878-30640c4e-626b-4fa5-9421-f700ab135e6c?action=share&source=collection_link&creator=43602878"
+	},
+	"item": [
+		{
+			"name": "Process_PDF",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/Users/yajurvbhatia/Documents/tulip_wiki_article.pdf"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/process-pdf/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"process-pdf",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "1. Initial Query_PDF",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"query\": \"Why are they called tulips?\",\n    \"user_id\": 1\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/query-pdf/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"query-pdf",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "2. Subsequent Query_PDF_w_Session_ID",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"query\": \"What colors are they found in?\",\n    \"user_id\": 1,\n    \"session_id\":\"4be76a83-5252-4c95-a6a8-333a810531b5\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/query-pdf/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"query-pdf",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "3. Subsequent Query_PDF_w_Session_ID",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"query\": \"Tell me an interesting fact about them.\",\n    \"user_id\": 1,\n    \"session_id\":\"4be76a83-5252-4c95-a6a8-333a810531b5\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/query-pdf/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"query-pdf",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "4. Save_Conversation",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"query\": \"Save this conversation.\",\n    \"user_id\": 1,\n    \"session_id\":\"4be76a83-5252-4c95-a6a8-333a810531b5\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/query-pdf/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"query-pdf",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "5. Fetch Saved Conversations",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"query\": \"Get all conversations that you have had with me.\",\n    \"user_id\": 1\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/query-pdf/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"query-pdf",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "6. Continue a Conversation",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"query\": \"Summarize all the information that you have provided so far.\",\n    \"user_id\": 1,\n    \"conversation_id\": 2\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/query-pdf/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"query-pdf",
+						""
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "7. Search Web for Info",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"query\": \"Now, tell me something interesting about sugar drinks.\",\n    \"user_id\": 1\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://127.0.0.1:8000/query-pdf/",
+					"protocol": "http",
+					"host": [
+						"127",
+						"0",
+						"0",
+						"1"
+					],
+					"port": "8000",
+					"path": [
+						"query-pdf",
+						""
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}
