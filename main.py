@@ -22,8 +22,6 @@ app = FastAPI()
 @app.post("/process-pdf/")
 async def process_pdf(file: UploadFile = File(...)):
     try:
-        # print("Starting PDF processing...")
-
         # Save the uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(await file.read())
@@ -32,13 +30,11 @@ async def process_pdf(file: UploadFile = File(...)):
         # Load PDF with LangChain
         loader = PyPDFLoader(tmp_path)
         documents = loader.load()
-        # print("Loaded Document...")
         
         # Remove temporary file
         os.unlink(tmp_path)
         
         # Split documents
-        # print("Splitting the document into chunks...")
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=CHUNK_SIZE,
             chunk_overlap=CHUNK_OVERLAP
@@ -46,12 +42,10 @@ async def process_pdf(file: UploadFile = File(...)):
         splits = text_splitter.split_documents(documents)
         
         # Getting Embeddings for chunks
-        # print("Getting embeddings for chunks...")
         texts = [doc.page_content for doc in splits]
         vectors = embedder.embed_documents(texts)
 
         # Save the vectors to PGVector
-        # print("Saving vectors to PGVector...")
         conn = connect_to_db()
         register_vector(conn)
         save_vectors(conn, texts, vectors)
@@ -90,10 +84,8 @@ async def query_pdf(request: QueryRequest):
 
     # Maintaing conversation history (memory string) to pass to the agent
     if request.conversation_id:
-        # print("User referred to a previous conversation.")
         # The user tries to refer to an a conversation get chat history
         memory_string = get_last_conversation_chat_history(request.conversation_id, request.user_id)
-        # print("Memory string is:", memory_string)
     else:
         memory_string = memory.load_memory_variables({})["chat_history"]
 
@@ -102,19 +94,12 @@ async def query_pdf(request: QueryRequest):
 
     inputs = f"'query_context': {memory_string}, 'user_query': {user_query},'session_id': {session.session_id}, 'user_id': {session.user_id}"
 
-    # inputs = {
-    #     "query_with_context": query_with_context, 
-    #     "session_id": session_id, 
-    #     "user_id": session.user_id
-    # }
     agent = create_agent(llm, session_id)
-    # print("\n\n\n\nAGENT INPUT KEYS\n\n\n")
-    # print(agent.input_keys)
 
     # Run the agent with the query and context
     response = agent.invoke({"input":inputs})
-    # print(f"\n🤖 Agent: {response}")
-    # print(f"\n🤖 Memory: {memory.buffer}")
+    # print(f"\n Agent: {response}")
+    # print(f"\n Memory: {memory.buffer}")
 
     return {"agent_response": response["output"],
             "session_id": session.session_id

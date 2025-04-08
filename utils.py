@@ -65,14 +65,12 @@ def save_vectors(conn, chunks, vectors):
             (chunk, vector)
         )
     conn.commit()
-    print("Vectors saved successfully to PGVector Database!")
+    # print("Vectors saved successfully to PGVector Database!")
 
 
 def get_last_conversation_chat_history(conversation_id, user_id):
     table_name = 'conversations'
 
-    # 1. Connect to DB
-    # print("🔌 Connecting to PostgreSQL...")
     conn = connect_to_db()
     cursor = conn.cursor()
 
